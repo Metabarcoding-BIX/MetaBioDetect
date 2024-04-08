@@ -1,1 +1,1 @@
-# BioDetect
+# MetaBiodetect
