@@ -1,0 +1,129 @@
+#!/bin/bash
+##
+## MATLAB submission script for PBS on CR2 
+## ------------------------------------------
+##
+##"MATLAB-sub2022v1"
+## Follow the 6 steps below to configure your job
+## 
+## STEP 1:
+##
+## Enter a job name after the -N on the line below:
+##
+#PBS -N QIIME_import_and_cutadapt
+##
+## STEP 2:
+##
+## Select the number of cpus/cores required by modifying the #PBS -l select line below
+##
+## Normally you select cpus in chunks of 16 cpus
+## The Maximum value for ncpus is 16 and mpiprocs MUST be the same value as ncpus.
+##
+## PLEASE NOTE
+## ===========
+## The standard matlab application does not run on more than one node
+## This select line must not be altered
+##
+#PBS -l select=1:ncpus=12:mpiprocs=12
+##
+## STEP 3:
+##
+## Select the correct queue by modifying the #PBS -q line below
+##
+## half_hour	-  30 minutes
+## one_hour	-   1 hour
+## three_hour   -   3 hours
+## six_hour     -   6 hours
+## half_day	-  12 hours
+## one_day	-  24 hours
+## two_day	-  48 hours
+## five_day	- 120 hours
+## ten_day	- 240 hours (by special arrangement)
+##
+#PBS -q three_hour
+##
+## STEP 4:
+##
+## Replace the hpc@cranfield.ac.uk email address
+## with your Cranfield email address on the #PBS -M line below:
+## Your email address is NOT your username
+##
+#PBS -m abe 
+#PBS -M shubham.patil.698@cranfield.ac.uk
+##
+## ====================================
+## DO NOT CHANGE THE LINES BETWEEN HERE
+## ====================================
+#PBS -l application=matlab
+#PBS -j oe
+#PBS -W sandbox=PRIVATE
+#PBS -k n
+ln -s $PWD $PBS_O_WORKDIR/$PBS_JOBID
+## Change to working directory
+cd $PBS_O_WORKDIR
+## Calculate number of CPUs
+export cpus=`cat $PBS_NODEFILE | wc -l`
+## ========
+## AND HERE
+## ========
+##
+## STEP 5: 
+##########################################################
+
+##QIIME2 PIPELINE FOR IMPORTING, TRIMMING AND DENOISISNG
+##########################################################
+
+module use /apps2/modules/all
+
+# Stop at runtime errors
+set -e
+
+# Load modules
+module load cutadapt/4.4-GCCcore-12.2.0
+
+base_folder="/mnt/beegfs/home/s438698/GP/"
+results_folder="/mnt/beegfs/project/Zahra_Karimi/bioinformatics_group_project3/SHUBHAM/TRIMMING_5/"
+
+for R1 in $base_folder/*_1.fq.gz
+do
+  # Get the filenames for the fastq files with forward (R1) and reverse (R2) reads:
+  R1=$(basename $R1)
+  R2=${R1/_1.fq.gz/_2.fq.gz}   # This will substitute "_R1_" with "_R2_" in the filename.
+
+    # Trim adapters
+    cutadapt \
+    -a AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGTAGATCTCGGTGGTCGCCGTATCATT...CAAGCAGAAGACGGCATACGAGATAGTCATCCGTGACTGGAGTTCAGACGTGTGCTCTTCCGATC \
+    -A GATCGGAAGAGCACACGTCTGAACTCCAGTCACGGATGACTATCTCGTATGCCGTCTTCTGCTTG...AATGATACGGCGACCACCGAGATCTACACTCTTTCCCTACACGACGCTCTTCCGATCT \
+    -o "$results_folder/$R1" -p "$results_folder/$R2" \
+    --minimum-length 50 \
+    --quality-cutoff 10 \
+    --max-n 0.05 \
+    --overlap 5 \
+    --error-rate 0.3 \
+    "$base_folder/$R1" "$base_folder/$R2"
+
+    # Trim primers
+    cutadapt \
+    -a GGGCAATCCTGAGCCAA...GATAGGTGCAGAGACTCAATGG \
+    -A CCATTGAGTCTCTGCACCTATC...TTGGCTCAGGATTGCCC \
+    -o "$results_folder/${R1/.fq.gz/_primer_trimmed.fq.gz}" -p "$results_folder/${R2/.fq.gz/_primer_trimmed.fq.gz}" \
+    --minimum-length 40 \
+    --quality-cutoff 15 \
+    --discard-untrimmed \
+    --pair-filter=any \
+    "$results_folder/$R1" "$results_folder/$R2"
+done
+
+# Completion message
+echo ""
+echo "Done"
+date
+# --- Your code ends here --- #
+
+## Tidy up the log directory
+## =========================
+rm $PBS_O_WORKDIR/$PBS_JOBID
+
+###########################################################
+
+
