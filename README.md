@@ -8,7 +8,7 @@ The app uses docker for packaging and hosting the metabarcoding analysis, theref
 
 **Note:** After installing docker make sure you launch it and keep it running before starting MetaBioDetect app.
 
-From `https://zenodo.org/records/11061123` folder download the excutable file that is compatible with your OS, and directly run the app with a double click :)
+From https://zenodo.org/records/11061123 folder download the excutable file that is compatible with your OS, and directly run the app with a double click :)
 
 ### Demo
 
@@ -20,7 +20,7 @@ Click the image above to watch the demo video.
 ### For Developers
 To modify and customize this tool for development purposes, follow these steps:
 
-1. Clone the Repository: `https://github.com/Metabarcoding-BIX/MetaBioDetect.git`
+1. Clone the Repository: `git clone https://github.com/Metabarcoding-BIX/MetaBioDetect.git`
 2. For updating the metabarcoding analysis pipeline, refer to **src/scripts/README.md**
 3. For deploying the changes in the app, refer to **src/README.md**
 
