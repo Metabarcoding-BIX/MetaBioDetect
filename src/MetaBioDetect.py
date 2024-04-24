@@ -7,7 +7,6 @@ import docker
 import subprocess
 import matplotlib.pyplot as plt
 from tkinter import messagebox  
-import fpdf
 import sys
 # To import packages from it
 app_resources_folder = os.path.join(os.path.dirname(__file__), 'resources')
