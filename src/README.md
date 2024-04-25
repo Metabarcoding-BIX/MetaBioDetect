@@ -9,8 +9,8 @@ This folder contains the main GUI python script `MetaBioDetect.py`, and two fold
 ## App deployment (developer use)
 First make sure the docker image is located in **src/resources**, refer to its README.md to set it up.
 
-To depoly the app with new changes, naviagte to the directory where main GUI script `MetaBioDetect.py` resides and run the following:
+To deploy the app with new changes, navigate to the directory where main GUI script `MetaBioDetect.py` resides and run the following:
 
 `pyinstaller  MetaBioDetect.py --onefile --add-data="resources:resources"`
 
-This command will generate two folder `build` and `dist`. The dist folder will have the applicaton excutable file that is ready to run with a double click :)
+This command will generate two folders `build` and `dist`. The dist folder will have the application executable file that is ready to run with a double click :)

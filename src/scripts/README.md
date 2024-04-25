@@ -1,8 +1,8 @@
 # MetaBioDetect
 
-In this folder, you can find the metabrcoding analysis scripts, taxonomy databases folder (db), and the Dockerfile, that is used to package the analysis scripts and dependencies in one place. Docker container was used to run the analysis in an isolated environment, ensuring consistency in software deployment across different computing infrastructure. Currently it's compatible with Debian-based Linux distributions, macOS, and Windows.
+In this folder, you can find the metabarcoding analysis scripts, taxonomy databases folder (db), and the Dockerfile, that is used to package the analysis scripts and dependencies in one place. Docker container was used to run the analysis in an isolated environment, ensuring consistency in software deployment across different computing infrastructure. Currently it's compatible with Debian-based Linux distributions, macOS, and Windows.
 
-The metabarcoding analysis pipeline was built using cutadapt=4.8 for trimming and Vsearch (v2.27.1_linux_aarch64) for the main metabarcdoing steps. Following is the pipeline:
+The metabarcoding analysis pipeline was built using cutadapt=4.8 for trimming and Vsearch (v2.27.1_linux_aarch64) for the main metabarcoding steps. Following is the pipeline:
 
 1. Adapter trimming (`adapter_trimming.sh`)
 2. Primer trimming (`primer_trimming.sh`)
@@ -22,7 +22,7 @@ For rebuilding the Docker image with updated scripts, databases, and dependencie
 
 1. To update or add new scripts make sure to include them in the same directory of the Dockerfile, so they get copied inside the container. For updating the dependencies refer to the Dockerfile and add the related commands for them. 
 
-2. After having the updates, in terminal, navigate to the directory where Dockerfie resides and build the image by running:
+2. After having the updates, in terminal, navigate to the directory where Dockerfile resides and build the image by running:
 
 `docker build -t meta_bio_detect .` 
 
