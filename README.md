@@ -8,7 +8,7 @@ The app uses docker for packaging and hosting the metabarcoding analysis, theref
 
 **Note:** After installing docker make sure you launch it and keep it running before starting MetaBioDetect app.
 
-From https://zenodo.org/records/11061123 folder download the excutable file that is compatible with your OS, and directly run the app with a double click :)
+From https://zenodo.org/records/11061123 folder download the executable file that is compatible with your OS, and directly run the app with a double click :)
 
 ### Demo
 
