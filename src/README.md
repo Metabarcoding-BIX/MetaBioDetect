@@ -7,7 +7,7 @@ This folder contains the main GUI python script `MetaBioDetect.py`, and two fold
 `resources` holds the application scripts for its functionalities and features that are apart from the main GUI script as well as the docker image tar file generated following the steps in **src/scripts/README.md**
 
 ## App deployment (developer use)
-First make sure the docker image is located in **src/resources**, refer to its README.md to set it up.
+First, make sure the docker image is located in **src/resources**, refer to its README.md to set it up. Second, install **pyinstaller** package, which bundle the application and all its dependencies into a single executable file, by running the following in terminal: `pip install pyinstaller`
 
 To deploy the app with new changes, navigate to the directory where main GUI script `MetaBioDetect.py` resides and run the following:
 
