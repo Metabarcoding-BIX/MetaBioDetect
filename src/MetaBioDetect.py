@@ -8,13 +8,14 @@ import subprocess
 import matplotlib.pyplot as plt
 from tkinter import messagebox  
 import sys
-# To import packages from it
+# To import packages from resources folder
 app_resources_folder = os.path.join(os.path.dirname(__file__), 'resources')
 sys.path.append(app_resources_folder)
 from utils import CreateToolTip
 
 
-mount_dir = ""
+mount_dir = "" # define the main directory to mount containing input seq files
+volumes = {} # define the dictionary of directories to mount to docker
 
 #creating main GUI shell
 window = tk.Tk() #can also define size with .geometry without use of frame
@@ -156,7 +157,7 @@ def removing_chimera_func(container):
     
 def taxonomy_assignment_func(container):
     container.exec_run('chmod +x /app/taxonomy_assignment.sh', demux=True)
-    vsearch_step6_output = container.exec_run(f'/app/taxonomy_assignment.sh --db={vser_db} --id={vsearch_id}', demux=True)
+    vsearch_step6_output = container.exec_run(f'/app/taxonomy_assignment.sh --db={db} --id={vsearch_id}', demux=True)
     catch_docker_error(vsearch_step6_output)
     
     
@@ -175,8 +176,16 @@ def pipeline_func():
         
         # Run the docker image with the mounted directory 
         print(loaded_image.id)
-        container = client.containers.run(loaded_image.id, detach=True, tty=True, volumes={mount_dir: {'bind': '/app/uploads', 'mode': 'rw'}}, command="/bin/bash")
-
+        # Create the volumes dictionary with original (seq files) directory to mount
+        volumes[mount_dir] = {'bind': '/app/uploads', 'mode': 'rw'}
+        print("Volumes:\n")
+        print(volumes)
+        container = client.containers.run(loaded_image.id, detach=True, tty=True, volumes=volumes, command="/bin/bash")
+        
+        # For the /app/db directory:
+        exit_code, output = container.exec_run("ls -l /app/db")
+        print("Contents of /app/db:")
+        print(output.decode())
         
         #if statement to say no files loaded in fun with no files
         files_text_display.insert(END,"Analysis Started ...\n\n")
@@ -291,7 +300,7 @@ prime_trimming_tick_var=tk.IntVar()
 
 #setting empty variables for parameters
 fastq_maxee_var=tk.StringVar()
-vser_db_var = tk.StringVar()
+db_var = tk.StringVar()
 id_var=tk.StringVar()
 
 adapt_for_read_var=tk.StringVar()
@@ -320,7 +329,7 @@ param_window = ""
 
 
 fastq_maxee = ""
-vser_db = ""
+db = ""
 vsearch_id = ""
 adapt_for_read = ""
 adapt_rev_read = ""
@@ -343,14 +352,14 @@ prime_trimming = ""
 
 #function for user parameter input
 def user_submit():
-    global fastq_maxee, vser_db, vsearch_id, adapt_for_read, \
+    global fastq_maxee, db, vsearch_id, adapt_for_read, \
     adapt_rev_read, adapt_min_length, adapt_qual_cutoff, adapt_maxn, \
     adapt_overlap, adapt_error_rate, adapt_discard_untrim, prime_for_read, \
     prime_rev_read, prime_min_length, prime_qual_cutoff, prime_maxn, \
     prime_overlap, prime_error_rate, prime_discard_untrim, adapt_trimming, prime_trimming 
     
     fastq_maxee=fastq_maxee_var.get()
-    vser_db=vser_db_var.get()
+    db=db_var.get()
     vsearch_id=id_var.get()
     adapt_for_read=adapt_for_read_var.get()
     adapt_rev_read=adapt_rev_read_var.get()
@@ -453,7 +462,7 @@ def user_submit():
     files_text_display.insert(END, vsearch_id)
     files_text_display.insert(END, '\n')
     files_text_display.insert(END, "Database: ")
-    files_text_display.insert(END, vser_db)
+    files_text_display.insert(END, db)
     files_text_display.insert(END, '\n')
     files_text_display.insert(END, '\n')
     files_text_display.see(END)
@@ -466,7 +475,6 @@ def user_submit():
     param_window.destroy()
     
     
-    
 def returning_cutadapt_forward_reverse(forward_read, reverse_read):
     # Generate the adapter pairs
     forward, reverse_rc, reverse, forward_rc = seq_pairs(forward_read, reverse_read)
@@ -476,7 +484,22 @@ def returning_cutadapt_forward_reverse(forward_read, reverse_read):
     reverse_read = f"{reverse_read}...{forward_rc}"
     
     return forward_read, reverse_read
-    
+
+
+def upload_database():
+    global db_var
+    # upload database
+    db_path = filedialog.askopenfilename(
+        title="Select a database file",
+        filetypes=[("FASTA Files", "*.fa *.fna *.ffn *.faa *.frn *.fasta"), ("All Files", "*.*")]
+    )
+    if db_path:
+        db_name = os.path.basename(db_path)
+        db_var.set(db_name) 
+        global volumes
+        # Add uploaded db to the the docker image volumes for mounting
+        volumes[db_path] = {'bind': f'/app/db/{db_name}', 'mode': 'rw'}
+
 
 def open_parameters_window_func():
     global param_window
@@ -632,12 +655,19 @@ def open_parameters_window_func():
     CreateToolTip(id_label, text="(Mandatory) Sequence identity threshold set to (usually 0.97 or 0.99) for assigning taxonomy.\n(values ranges from 0.0 to 1.0)")
     id_entry = tk.Entry(param_frame, textvariable = id_var, font=('calibre',10,'normal'))
     id_entry.grid(row=17, column=1, padx=10, pady=5, sticky="w")
+    
+    # Database section
+    db_var.set("Select a predefined database...")
 
     db_label = tk.Label(master=param_frame, text="Database: *", font=("Arial", 13, "normal"))
     db_label.grid(row=18, column=0, padx=10, pady=5, sticky="w")
     CreateToolTip(db_label, text="(Mandatory) Reference database file used for taxonomic assignment.")
-    dis_untrim_dropdown = tk.OptionMenu(param_frame, vser_db_var, "trnL_GH.fasta", "trnL_CD.fasta", "RbcL.fasta", "psbA-trnH.fasta", "MatK.fasta", "atpF-atpH.fasta", "ITS.fasta")
-    dis_untrim_dropdown.grid(row=18, column=1, padx=10, pady=5, sticky="w")
+    db_dropdown = tk.OptionMenu(param_frame, db_var, "Select a predefined database...", "trnL_GH.fasta", "trnL_CD.fasta", "RbcL.fasta", "psbA-trnH.fasta", "MatK.fasta", "atpF-atpH.fasta", "ITS.fasta")
+    db_dropdown.grid(row=18, column=1, padx=10, pady=5, sticky="w")
+    
+    # Upload custom database
+    upload_db_button = tk.Button(master=param_frame, text=" Or Upload Database", command=upload_database)
+    upload_db_button.grid(row=18, column=2, padx=10, pady=5, sticky="w")
 
     # Submit button
     set_param_button = tk.Button(master=param_frame, text="Submit Parameters", width=15, height=1, command=user_submit)
