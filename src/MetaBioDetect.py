@@ -20,6 +20,7 @@ volumes = {} # define the dictionary of directories to mount to docker
 #creating main GUI shell
 window = tk.Tk() #can also define size with .geometry without use of frame
 frame = tk.Frame(master=window, width=1200, height=600)
+frame.pack(fill=tk.BOTH, expand=True)  # Allow frame to expand
 window.title("MetaBioDetect")
 frame.pack()
 
@@ -35,9 +36,49 @@ def calculate_pair_func(file):
         #return an error 
     return complement
 
+# Global variable to track whether reads are paired-end or single-end
+is_paired_end = True  # Default to paired-end
 
 #function for loading files and storing filepath and names for pipeline
-def load_files_func():
+def load_single_files_func():
+    global is_paired_end
+    is_paired_end = False
+    # Clearing the text display each time files are opened
+    files_text_display.delete('1.0', END)
+    
+    # Open file dialog to select single-end read files
+    loaded_files = filedialog.askopenfilenames()
+    
+    # Extract the parent folder to mount inside docker image
+    global mount_dir
+    mount_dir = os.path.dirname(loaded_files[0])
+    print("-" * 30)
+    print("mount directory")
+    print(mount_dir)
+    
+    mounted_dir_pickle_path = os.path.join(os.path.dirname(__file__), 'resources', 'mounted_dir.pickle')
+    # Save mounted directory to pickle file
+    save_dict = {"mount_dir": mount_dir}
+    with open(mounted_dir_pickle_path, 'wb') as handle:
+        pickle.dump(save_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    
+    # Filter out single-end files that end with ".fq.gz" or any other file extension you want
+    loaded_files = [file.replace(mount_dir, "") for file in loaded_files if file.endswith(".fq.gz")]
+    loaded_files = tuple(loaded_files)
+    
+    # Display loaded files in the progress area
+    files_text_display.insert(END, "Loaded Single-end Files:\n")
+    files_text_display.insert(END, ("\n").join(loaded_files) + "\n")
+    files_text_display.see(END)
+    
+    # Write the loaded single-end files into a filenames.txt file in the mounted directory
+    file_content = "\n".join(loaded_files) + "\n"  # Join records with newlines, add extra newline at the end
+    with open(f"{mount_dir}/filenames.txt", "w") as f:
+        f.write(file_content)
+
+def load_paired_files_func():
+    global is_paired_end
+    is_paired_end = True
     pairs_list = []
     complements = set()
     #clearing text display everytime files are opened
@@ -81,7 +122,6 @@ def load_files_func():
         f.write(file_content)
 
 
-
 def reverse_complement(seq):
     complement = {'A': 'T', 'C': 'G', 'G': 'C', 'T': 'A'}
     return ''.join(complement[base] for base in reversed(seq))
@@ -109,28 +149,58 @@ def catch_docker_error(docker_out):
 
 def adapter_trim_func(container):
     container.exec_run('chmod +x /app/adapter_trimming.sh')
+
+    # Common parameters
+    common_params = f'--a={adapt_for_read} --minimum-length={adapt_min_length} --quality-cutoff={adapt_qual_cutoff} --max-n={adapt_maxn} --overlap={adapt_overlap} --error-rate={adapt_error_rate}'
+
     if adapt_discard_untrim == "Yes":
-        adapter_trim_output = container.exec_run(f'/app/adapter_trimming.sh --a={adapt_for_read} --A={adapt_rev_read} --minimum-length={adapt_min_length} --quality-cutoff={adapt_qual_cutoff} --max-n={adapt_maxn} --overlap={adapt_overlap} --error-rate={adapt_error_rate} --discard-untrimmed=1',
-                                        demux=True)
-        catch_docker_error(adapter_trim_output)
+        common_params += ' --discard-untrimmed=1'
+
+    # Use paired-end or single-end trimming based on the flag
+    if is_paired_end:
+        paired_end_params = common_params + f' --A={adapt_rev_read}'
+        adapter_trim_output = container.exec_run(f'/app/adapter_trimming.sh {paired_end_params}', demux=True)
     else:
-        adapter_trim_output = container.exec_run(f'/app/adapter_trimming.sh --a={adapt_for_read} --A={adapt_rev_read} --minimum-length={adapt_min_length} --quality-cutoff={adapt_qual_cutoff} --max-n={adapt_maxn} --overlap={adapt_overlap} --error-rate={adapt_error_rate}',
-                                        demux=True)
-        catch_docker_error(adapter_trim_output)
+        adapter_trim_output = container.exec_run(f'/app/adapter_trimming.sh {common_params}', demux=True)
+
+    # Error handling
+    catch_docker_error(adapter_trim_output)
         
         
 def primer_trim_func(container):
     container.exec_run('chmod +x /app/primer_trimming.sh')
-    if prime_discard_untrim == "Yes":
-        primer_trim_output = container.exec_run(f'/app/primer_trimming.sh --a={prime_for_read} --A={prime_rev_read} --minimum-length={prime_min_length} --quality-cutoff={prime_qual_cutoff} --max-n={prime_maxn} --overlap={prime_overlap} --error-rate={prime_error_rate} --discard-untrimmed=1',
-                                            demux=True)
-        catch_docker_error(primer_trim_output)
-    else:
-        primer_trim_output = container.exec_run(f'/app/primer_trimming.sh --a={prime_for_read} --A={prime_rev_read} --minimum-length={prime_min_length} --quality-cutoff={prime_qual_cutoff} --max-n={prime_maxn} --overlap={prime_overlap} --error-rate={prime_error_rate}',
-                                            demux=True)
-        catch_docker_error(primer_trim_output)
+
+    # Check if the paired-end flag is set
+    if is_paired_end:  # This variable should be set based on user selection
+        if prime_discard_untrim == "Yes":
+            primer_trim_output = container.exec_run(
+                f'/app/primer_trimming.sh --a={prime_for_read} --A={prime_rev_read} --minimum-length={prime_min_length} --quality-cutoff={prime_qual_cutoff} --max-n={prime_maxn} --overlap={prime_overlap} --error-rate={prime_error_rate} --discard-untrimmed=1',
+                demux=True
+            )
+        else:
+            primer_trim_output = container.exec_run(
+                f'/app/primer_trimming.sh --a={prime_for_read} --A={prime_rev_read} --minimum-length={prime_min_length} --quality-cutoff={prime_qual_cutoff} --max-n={prime_maxn} --overlap={prime_overlap} --error-rate={prime_error_rate}',
+                demux=True
+            )
+    else:  # For single-end reads
+        if prime_discard_untrim == "Yes":
+            primer_trim_output = container.exec_run(
+                f'/app/primer_trimming.sh --a={prime_for_read} --minimum-length={prime_min_length} --quality-cutoff={prime_qual_cutoff} --max-n={prime_maxn} --overlap={prime_overlap} --error-rate={prime_error_rate} --discard-untrimmed=1',
+                demux=True
+            )
+        else:
+            primer_trim_output = container.exec_run(
+                f'/app/primer_trimming.sh --a={prime_for_read} --minimum-length={prime_min_length} --quality-cutoff={prime_qual_cutoff} --max-n={prime_maxn} --overlap={prime_overlap} --error-rate={prime_error_rate}',
+                demux=True
+            )
+
+    # Catch errors from Docker
+    catch_docker_error(primer_trim_output)
     
 def merging_paired_end_func(container):
+    if not is_paired_end:
+        print("Merging step is only applicable for paired-end reads.")
+        return  # Exit the function if single-end reads are selected
     container.exec_run('chmod +x /app/merge_pair_end.sh', demux=True)
     vsearch_step1_output = container.exec_run('/app/merge_pair_end.sh', demux=True)
     catch_docker_error(vsearch_step1_output)
@@ -485,6 +555,38 @@ def returning_cutadapt_forward_reverse(forward_read, reverse_read):
     
     return forward_read, reverse_read
 
+def open_manual_window():
+    manual_window = tk.Toplevel(window)  # Create a new window
+    manual_window.title("User Manual")
+    
+    # Create a label for the manual content or instructions
+    manual_text = """\
+This is the user manual for MetaBioDetect.
+
+To access the full manual, you can download it from:
+[https://zenodo.org/records/11061123]
+
+Software sourcing:
+The MetaBioDetect software can be found in the GitHub repository 
+https://github.com/Metabarcoding-BIX/MetaBioDetect and can be downloaded by 
+navigating to: https://zenodo.org/records/11061123 for downloads compatible with 
+different operating systems and a Docker image containing the required dependencies. 
+The app uses docker for packaging and hosting the metabarcoding analysis, therefore 
+before using the tool, ensure docker is installed on your system. After installing docker 
+make sure it is launched and running before starting MetaBioDetect app. 
+
+
+
+For any further assistance, please contact support.
+Bana Ibrahim  : email
+Shubham Patil : email"""
+    
+    manual_label = tk.Label(manual_window, text=manual_text, justify="left", padx=10, pady=10)
+    manual_label.pack()
+
+    # Add a button to close the manual window
+    close_button = tk.Button(manual_window, text="Close", command=manual_window.destroy)
+    close_button.pack(pady=5)
 
 def upload_database():
     global db_var
@@ -677,26 +779,62 @@ def open_parameters_window_func():
 
 
     
-#creating GUI labels and text boxes
-meta_analy_label = tk.Label(master=frame, text="Metabarcoding Analysis", font=("Arial", 16, "bold"))
-meta_analy_label.grid(row=0, column=0, padx=10, pady=5, sticky="w")
+# Creating GUI labels and text boxes
+meta_analy_label = tk.Label(master=frame, text="Metabarcoding Analysis", font=("Arial", 12, "bold"))
+meta_analy_label.grid(row=0, column=0, padx=0, pady=1, sticky="w", )
 
-load_files_button = tk.Button(master=frame,text="Load Files", width=10, height=1, command=load_files_func)
-load_files_button.grid(row=1, column=0, padx=10, pady=5, sticky="w")
+# Create frames for organization
+header_frame = tk.Frame(window, bg="#000000")  # Black header
+header_frame.pack(fill=tk.X, padx=0, pady=0)
 
+# Header label
+meta_analy_label = tk.Label(header_frame, text="MetaBioDetect", font=("Arial", 20, "bold"), bg="#000000", fg="white")
+meta_analy_label.pack(pady=5)
 
-select_param_button = tk.Button(master=frame,text="Select Parameters", width=10, height=1, command=open_parameters_window_func)
-select_param_button.grid(row=2, column=0, padx=10, pady=5, sticky="w")
+# Frame for app info, labels, and buttons (to prevent them from being pushed down)
+info_button_frame = tk.Frame(window)
+info_button_frame.pack(fill=tk.X, padx=5, pady=5)
 
-files_text_display = tk.Text(master=frame, height=30, width=139)
-files_text_display.grid(row=1, column=1, columnspan=2, rowspan=4, padx=10, pady=5, sticky="w")
-files_text_display.insert(END,"Analysis progress area:\n")
+# App information label
+meta_analy_info_label = tk.Label(info_button_frame, text="A software developed by Cranfield University for food quality authentication through metabarcoding analysis of food products.", font=("Arial", 11))
+meta_analy_info_label.grid(row=0, column=0, columnspan=2, padx=10, pady=5, sticky="w")
 
-run_pipe_button = tk.Button(master=frame,text="Start Analysis", width=10, height=1, command=pipeline_func) 
-run_pipe_button.grid(row=3, column=0, padx=10, pady=5, sticky="w")
+# Button for loading single-end reads
+load_single_button = tk.Button(info_button_frame, text="Load Single-end Files", width=20, command=load_single_files_func)
+load_single_button.grid(row=1, column=0, padx=10, pady=5, sticky="w")
 
-analy_out_button = tk.Button(master=frame,text="Analyse Output", width=10, height=1, command=open_analysis_window_func)
-analy_out_button.grid(row=4, column=0, padx=10, pady=5, sticky="w")
+# Button for loading paired-end reads
+load_files_button = tk.Button(info_button_frame, text="Load Paired-end Files", width=20, command=load_paired_files_func)
+load_files_button.grid(row=2, column=0, padx=10, pady=5, sticky="w")
 
+# Button for selecting parameters
+select_param_button = tk.Button(info_button_frame, text="Select Parameters", width=20, command=open_parameters_window_func)
+select_param_button.grid(row=3, column=0, padx=10, pady=5, sticky="w")
 
+# Button to run the pipeline
+run_pipe_button = tk.Button(info_button_frame, text="Start Analysis", width=20, command=pipeline_func)
+run_pipe_button.grid(row=2, column=1, padx=10, pady=5, sticky="w")
+
+# Button to analyze the output
+analy_out_button = tk.Button(info_button_frame, text="Analyze Output", width=20, command=open_analysis_window_func)
+analy_out_button.grid(row=2, column=2, padx=10, pady=5, sticky="w")
+
+# Create a frame for the text box that expands
+text_frame = tk.Frame(window)
+text_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
+# Text box for displaying file names and progress
+files_text_display = tk.Text(master=text_frame, height=30)
+files_text_display.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+files_text_display.insert(END, "Analysis progress area:\n")
+
+# Button for displaying the manual
+manual_button = tk.Button(info_button_frame, text="Open Manual", width=20, command=open_manual_window)
+manual_button.grid(row=4, column=0, padx=10, pady=5, sticky="w")
+
+# Configure the grid to allow the text box to expand
+text_frame.grid_columnconfigure(1, weight=1)  # Allow the text box to expand horizontally
+text_frame.grid_rowconfigure(1, weight=1)     # Allow the text box to expand vertically
+
+# Run the main loop
 window.mainloop()
